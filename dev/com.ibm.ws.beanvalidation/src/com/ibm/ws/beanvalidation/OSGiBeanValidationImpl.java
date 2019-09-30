@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2012, 2018 IBM Corporation and others.
+ * Copyright (c) 2012, 2019 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -77,6 +77,7 @@ public class OSGiBeanValidationImpl extends AbstractBeanValidation implements Mo
     private static final String REFERENCE_VALIDATION_CONFIG_FACTORY = "validationConfigFactory";
     private static final String REFERENCE_CLASSLOADING_SERVICE = "classLoadingService";
     private static final String REFERENCE_VALIDATOR_FACTORY_BUILDER = "ValidatorFactoryBuilder";
+    private static final String REFERENCE_META_DATA_SLOT_SERVICE = "metaDataSlotService";
 
     private MetaDataSlot ivModuleMetaDataSlot;
 
@@ -85,6 +86,8 @@ public class OSGiBeanValidationImpl extends AbstractBeanValidation implements Mo
     private final AtomicServiceReference<ClassLoadingService> classLoadingServiceSR = new AtomicServiceReference<ClassLoadingService>(REFERENCE_CLASSLOADING_SERVICE);
 
     private final AtomicServiceReference<ValidatorFactoryBuilder> validatorFactoryBuilderSR = new AtomicServiceReference<ValidatorFactoryBuilder>(REFERENCE_VALIDATOR_FACTORY_BUILDER);
+
+    private final AtomicServiceReference<MetaDataSlotService> metaDataSlotServiceSR = new AtomicServiceReference<MetaDataSlotService>(REFERENCE_META_DATA_SLOT_SERVICE);
 
     private static final Version DEFAULT_VERSION = BeanValidationRuntimeVersion.VERSION_1_0;
     private Version runtimeVersion = DEFAULT_VERSION;
@@ -431,6 +434,8 @@ public class OSGiBeanValidationImpl extends AbstractBeanValidation implements Mo
         classLoadingServiceSR.activate(cc);
         validationConfigFactorySR.activate(cc);
         validatorFactoryBuilderSR.activate(cc);
+        metaDataSlotServiceSR.activate(cc);
+        ivModuleMetaDataSlot = metaDataSlotServiceSR.getServiceWithException().reserveMetaDataSlot(ModuleMetaData.class);
     }
 
     @Deactivate
@@ -439,19 +444,20 @@ public class OSGiBeanValidationImpl extends AbstractBeanValidation implements Mo
         classLoadingServiceSR.deactivate(cc);
         validationConfigFactorySR.deactivate(cc);
         validatorFactoryBuilderSR.deactivate(cc);
+        metaDataSlotServiceSR.deactivate(cc);
     }
 
-    @Reference
-    protected void setMetaDataSlotService(MetaDataSlotService slotService) {
-        ivModuleMetaDataSlot = slotService.reserveMetaDataSlot(ModuleMetaData.class);
-        if (TraceComponent.isAnyTracingEnabled() && tc.isDebugEnabled())
-            Tr.debug(tc, "setMetaDataSlotService : mmd slot=" + ivModuleMetaDataSlot);
+    @Reference(name = "metaDataSlotService", service = MetaDataSlotService.class)
+    protected void setMetaDataSlotService(ServiceReference<MetaDataSlotService> reference) {
+        metaDataSlotServiceSR.setReference(reference);
     }
 
-    protected void unsetMetaDataSlotService(MetaDataSlotService slotService) {
-        ivModuleMetaDataSlot = null;
+    protected void unsetMetaDataSlotService(ServiceReference<MetaDataSlotService> reference) {
+        if (metaDataSlotServiceSR.unsetReference(reference)) {
+            ivModuleMetaDataSlot = null;
+        }
         if (TraceComponent.isAnyTracingEnabled() && tc.isDebugEnabled())
-            Tr.debug(tc, "unsetMetaDataSlotService");
+            Tr.debug(tc, "unsetMetaDataSlotService: ivModuleMetaDataSlot=" + ivModuleMetaDataSlot);
     }
 
     @Reference(service = BeanValidationRuntimeVersion.class,
